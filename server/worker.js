@@ -632,7 +632,9 @@ async function handleDashboard(request, env, corsHeaders, path) {
   // ── Auth (no session required) ──────────────────────────────────────────
 
   if (path === '/api/v1/dashboard/signup' && method === 'POST') {
-    return dashboardSignup(request, env, corsHeaders);
+    // Signups disabled until CLI is published
+    return Response.json({ error: 'Signups are temporarily closed. Coming soon.' }, { status: 403, headers: corsHeaders });
+    // return dashboardSignup(request, env, corsHeaders);
   }
   if (path === '/api/v1/dashboard/login' && method === 'POST') {
     return dashboardLogin(request, env, corsHeaders);
