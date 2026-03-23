@@ -283,6 +283,20 @@ async function main() {
         process.exit(1);
       }
 
+      // Require --confirm flag or interactive confirmation
+      if (!args.includes('--confirm')) {
+        const readline = require('readline');
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const answer = await new Promise(resolve => {
+          rl.question(`\n  WARNING: This will permanently delete ${secretName} from ${env}.\n  This creates a new version without the key. You can rollback if needed.\n\n  Type the secret name to confirm: `, resolve);
+        });
+        rl.close();
+        if (answer.trim() !== secretName) {
+          console.log('Aborted.');
+          process.exit(0);
+        }
+      }
+
       delete secrets[secretName];
       const pushResult = await pushSecrets(vaultKey, env, secrets, vaultUrl);
       console.log(`Deleted ${secretName}. Version: ${pushResult.version} (${Object.keys(secrets).length} secrets remaining)`);
