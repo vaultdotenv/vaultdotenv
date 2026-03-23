@@ -6,3 +6,5 @@ out/
 *.key
 .DS_Store
 .wrangler/
+dashboard/
+website/
