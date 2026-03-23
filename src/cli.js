@@ -183,9 +183,11 @@ async function main() {
       const env = getEnvironment();
       const vaultUrl = getVaultUrl();
       const secretName = args[1];
+      const raw = args.includes('--raw');
+      const token = getFlag('token');
 
       if (!secretName) {
-        console.error('Error: secret name required. Usage: vaultdotenv get SECRET_NAME [--env production] [--raw]');
+        console.error('Usage: vaultdotenv get SECRET_NAME [--env production] [--raw --token TOKEN]');
         process.exit(1);
       }
 
@@ -196,11 +198,94 @@ async function main() {
         process.exit(1);
       }
 
-      if (args.includes('--raw')) {
+      if (raw) {
+        if (!token) {
+          console.error('Error: --raw requires --token. Generate one from the dashboard.');
+          process.exit(1);
+        }
+
+        // Validate reveal token with the server
+        const parsed = parseVaultKey(vaultKey);
+        const body = JSON.stringify({ project_id: parsed.projectId, token });
+        const { signature } = sign(vaultKey, body);
+
+        const resp = await fetch(`${vaultUrl}/api/v1/reveal-token/validate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Vault-Signature': signature },
+          body,
+        });
+
+        if (!resp.ok) {
+          console.error(`Error: token validation failed (${resp.status})`);
+          process.exit(1);
+        }
+
+        const result = await resp.json();
+        if (!result.valid) {
+          console.error(`Error: reveal token ${result.reason || 'invalid'}. Generate a new one from the dashboard.`);
+          process.exit(1);
+        }
+
         process.stdout.write(String(secrets[secretName]));
       } else {
-        console.log(`${secretName}=${secrets[secretName]}`);
+        const val = String(secrets[secretName]);
+        const masked = val.length > 8 ? val.slice(0, 4) + '...' + val.slice(-4) : '****';
+        console.log(`${secretName}=${masked}`);
       }
+      break;
+    }
+
+    case 'set': {
+      const vaultKey = getVaultKey();
+      const env = getEnvironment();
+      const vaultUrl = getVaultUrl();
+      const secretName = args[1];
+      const secretValue = args[2];
+
+      if (!secretName || secretValue === undefined) {
+        console.error('Usage: vaultdotenv set SECRET_NAME "value" [--env production]');
+        process.exit(1);
+      }
+
+      // Pull existing secrets, update the one key, push back
+      console.log(`Setting ${secretName} in ${env}...`);
+      let secrets;
+      try {
+        const result = await pullSecrets(vaultKey, env, vaultUrl);
+        secrets = result.secrets;
+      } catch {
+        // No secrets yet — start fresh
+        secrets = {};
+      }
+
+      secrets[secretName] = secretValue;
+
+      const pushResult = await pushSecrets(vaultKey, env, secrets, vaultUrl);
+      console.log(`Set ${secretName}. Version: ${pushResult.version} (${Object.keys(secrets).length} total secrets)`);
+      break;
+    }
+
+    case 'delete': {
+      const vaultKey = getVaultKey();
+      const env = getEnvironment();
+      const vaultUrl = getVaultUrl();
+      const secretName = args[1];
+
+      if (!secretName) {
+        console.error('Usage: vaultdotenv delete SECRET_NAME [--env production]');
+        process.exit(1);
+      }
+
+      const { secrets } = await pullSecrets(vaultKey, env, vaultUrl);
+
+      if (!(secretName in secrets)) {
+        console.error(`Error: ${secretName} not found in ${env}`);
+        process.exit(1);
+      }
+
+      delete secrets[secretName];
+      const pushResult = await pushSecrets(vaultKey, env, secrets, vaultUrl);
+      console.log(`Deleted ${secretName}. Version: ${pushResult.version} (${Object.keys(secrets).length} secrets remaining)`);
       break;
     }
 
@@ -351,9 +436,12 @@ Usage:
   vaultdotenv init [--name project]   Initialize a new vault project
   vaultdotenv push [--env production] Push .env secrets to vault
   vaultdotenv pull [--env staging]    Pull secrets from vault
-  vaultdotenv get KEY [--env prod]    Get a single secret (--raw for value only)
-  vaultdotenv versions [--env prod]   List secret versions
-  vaultdotenv rollback --version 5    Rollback to a specific version
+  vaultdotenv set KEY "value"          Set a single secret
+  vaultdotenv delete KEY               Remove a secret
+  vaultdotenv get KEY [--env prod]     Get a single secret (masked)
+  vaultdotenv get KEY --raw --token T  Reveal cleartext (requires token)
+  vaultdotenv versions [--env prod]    List secret versions
+  vaultdotenv rollback --version 5     Rollback to a specific version
 
 Device management:
   vaultdotenv register-device         Register this machine with the vault
