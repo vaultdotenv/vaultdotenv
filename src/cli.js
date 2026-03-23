@@ -323,7 +323,9 @@ async function main() {
 
       console.log(`Versions for ${env}:\n`);
       for (const v of data.versions) {
-        console.log(`  v${v.version}  ${v.created_at}  ${v.changed_keys?.length || '?'} keys changed`);
+        const keys = v.changed_keys ? (typeof v.changed_keys === 'string' ? JSON.parse(v.changed_keys) : v.changed_keys) : null;
+        console.log(`  v${v.version}  ${v.created_at}  ${keys ? keys.length + ' keys' : '?'}`);
+
       }
       break;
     }
