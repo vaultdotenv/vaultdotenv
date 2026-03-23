@@ -146,9 +146,46 @@ async function main() {
         process.exit(1);
       }
 
+      // Diff against previous version to track actual changes
+      let changedKeys = null;
+      try {
+        const prev = await pullSecrets(vaultKey, env, vaultUrl);
+        const prevSecrets = prev.secrets;
+        const diff = [];
+        // Added or modified
+        for (const key of Object.keys(secrets)) {
+          if (!(key in prevSecrets)) {
+            diff.push(`+${key}`);
+          } else if (String(prevSecrets[key]) !== String(secrets[key])) {
+            diff.push(`~${key}`);
+          }
+        }
+        // Deleted
+        for (const key of Object.keys(prevSecrets)) {
+          if (!(key in secrets)) {
+            diff.push(`-${key}`);
+          }
+        }
+        if (diff.length > 0) changedKeys = diff;
+      } catch {
+        // No previous version — all keys are new
+        changedKeys = Object.keys(secrets).map(k => `+${k}`);
+      }
+
       console.log(`Pushing ${keyCount} secrets to ${env}...`);
-      const result = await pushSecrets(vaultKey, env, secrets, vaultUrl);
-      console.log(`Pushed. Version: ${result.version}`);
+      const result = await pushSecrets(vaultKey, env, secrets, vaultUrl, undefined, changedKeys);
+      if (changedKeys) {
+        const added = changedKeys.filter(k => k.startsWith('+')).length;
+        const modified = changedKeys.filter(k => k.startsWith('~')).length;
+        const removed = changedKeys.filter(k => k.startsWith('-')).length;
+        const parts = [];
+        if (added) parts.push(`${added} added`);
+        if (modified) parts.push(`${modified} modified`);
+        if (removed) parts.push(`${removed} removed`);
+        console.log(`Pushed. Version: ${result.version} (${parts.join(', ')})`);
+      } else {
+        console.log(`Pushed. Version: ${result.version} (no changes)`);
+      }
       break;
     }
 
@@ -258,9 +295,10 @@ async function main() {
         secrets = {};
       }
 
+      const isNew = !(secretName in secrets);
       secrets[secretName] = secretValue;
 
-      const pushResult = await pushSecrets(vaultKey, env, secrets, vaultUrl, undefined, [secretName]);
+      const pushResult = await pushSecrets(vaultKey, env, secrets, vaultUrl, undefined, [`${isNew ? '+' : '~'}${secretName}`]);
       console.log(`Set ${secretName}. Version: ${pushResult.version} (${Object.keys(secrets).length} total secrets)`);
       break;
     }
