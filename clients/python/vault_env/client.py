@@ -1,4 +1,4 @@
-"""Core vault-env client — drop-in replacement for python-dotenv."""
+"""Core vaultdotenv client — drop-in replacement for python-dotenv."""
 from __future__ import annotations
 
 import json
@@ -88,8 +88,8 @@ def pull_secrets(
         if resp.status_code == 403:
             text = resp.text
             if "pending" in text:
-                raise RuntimeError("Device not yet approved. Ask the project owner to run: vault-env approve-device")
-            raise RuntimeError("Device not registered. Run: vault-env register-device")
+                raise RuntimeError("Device not yet approved. Ask the project owner to run: vaultdotenv approve-device")
+            raise RuntimeError("Device not registered. Run: vaultdotenv register-device")
         raise RuntimeError(f"Vault pull failed ({resp.status_code}): {resp.text}")
 
     data = resp.json()
@@ -224,9 +224,9 @@ def load_vault(
             secrets = _load_cache(vault_key, env_path.parent, device_secret)
             if secrets:
                 import sys
-                print("[vault-env] Remote fetch failed, using cached secrets", file=sys.stderr)
+                print("[vaultdotenv] Remote fetch failed, using cached secrets", file=sys.stderr)
             else:
-                raise RuntimeError(f"[vault-env] Failed to fetch secrets and no cache available: {err}") from err
+                raise RuntimeError(f"[vaultdotenv] Failed to fetch secrets and no cache available: {err}") from err
         else:
             raise
 
@@ -268,7 +268,7 @@ def load_vault_sync(path: str | Path = ".env", override: bool = False) -> dict:
         return cached
 
     import sys
-    print("[vault-env] No cache available, falling back to local .env", file=sys.stderr)
+    print("[vaultdotenv] No cache available, falling back to local .env", file=sys.stderr)
     for key, val in local_env.items():
         if not override and key in os.environ:
             continue
@@ -302,7 +302,7 @@ def watch(
 
     vault_key = os.environ.get("VAULT_KEY")
     if not vault_key:
-        raise RuntimeError("[vault-env] watch() requires VAULT_KEY — call load_vault() first")
+        raise RuntimeError("[vaultdotenv] watch() requires VAULT_KEY — call load_vault() first")
 
     environment = environment or os.environ.get("NODE_ENV") or os.environ.get("ENVIRONMENT") or "development"
     vault_url = vault_url or os.environ.get("VAULT_URL") or DEFAULT_VAULT_URL
@@ -342,11 +342,11 @@ def watch(
                     on_error(err)
                 else:
                     import sys
-                    print(f"[vault-env] Watch poll failed: {err}", file=sys.stderr)
+                    print(f"[vaultdotenv] Watch poll failed: {err}", file=sys.stderr)
 
             _watcher_stop.wait(interval)
 
-    _watcher_thread = threading.Thread(target=_poll, daemon=True, name="vault-env-watcher")
+    _watcher_thread = threading.Thread(target=_poll, daemon=True, name="vaultdotenv-watcher")
     _watcher_thread.start()
 
 

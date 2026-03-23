@@ -1,10 +1,11 @@
 {
-  "name": "vault-env",
+  "name": "vaultdotenv",
   "version": "0.1.0",
   "description": "Drop-in dotenv replacement. One master key locally, everything else encrypted remotely.",
   "main": "src/index.js",
   "bin": {
-    "vault-env": "./src/cli.js"
+    "vaultdotenv": "./src/cli.js",
+    "vde": "./src/cli.js"
   },
   "scripts": {
     "test": "node test/test.js"

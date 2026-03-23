@@ -166,7 +166,7 @@ async function main() {
         fs.writeFileSync(outPath, serializeDotenv(secrets) + '\n');
         console.log(`Wrote ${keyCount} secrets to ${outPath} (version ${version})`);
       } else {
-        console.log(`\n# vault-env pull (${env}, version ${version})`);
+        console.log(`\n# vaultdotenv pull (${env}, version ${version})`);
         console.log(`# ${keyCount} secrets\n`);
         for (const [key, val] of Object.entries(secrets)) {
           const masked = String(val).length > 8
@@ -242,7 +242,7 @@ async function main() {
       } else {
         console.log(`Device registered (pending approval).`);
         console.log(`Device ID: ${result.deviceId}`);
-        console.log(`\nAsk the project owner to approve: vault-env approve-device --id ${result.deviceId}`);
+        console.log(`\nAsk the project owner to approve: vaultdotenv approve-device --id ${result.deviceId}`);
       }
       break;
     }
@@ -319,23 +319,23 @@ async function main() {
 
     default:
       console.log(`
-vault-env — Remote secrets manager, drop-in dotenv replacement
+vaultdotenv — Remote secrets manager, drop-in dotenv replacement
 
 Usage:
-  vault-env init [--name project]   Initialize a new vault project
-  vault-env push [--env production] Push .env secrets to vault
-  vault-env pull [--env staging]    Pull secrets from vault
-  vault-env versions [--env prod]   List secret versions
-  vault-env rollback --version 5    Rollback to a specific version
+  vaultdotenv init [--name project]   Initialize a new vault project
+  vaultdotenv push [--env production] Push .env secrets to vault
+  vaultdotenv pull [--env staging]    Pull secrets from vault
+  vaultdotenv versions [--env prod]   List secret versions
+  vaultdotenv rollback --version 5    Rollback to a specific version
 
 Device management:
-  vault-env register-device         Register this machine with the vault
-  vault-env approve-device --id X   Approve a pending device
-  vault-env list-devices            List all registered devices
-  vault-env revoke-device --id X    Revoke a device's access
+  vaultdotenv register-device         Register this machine with the vault
+  vaultdotenv approve-device --id X   Approve a pending device
+  vaultdotenv list-devices            List all registered devices
+  vaultdotenv revoke-device --id X    Revoke a device's access
 
 MCP server:
-  vault-env mcp                    Start MCP server (stdio) for Claude Code
+  vaultdotenv mcp                    Start MCP server (stdio) for Claude Code
 
 Options:
   --env <name>      Environment (default: NODE_ENV or development)

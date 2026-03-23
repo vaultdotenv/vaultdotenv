@@ -146,9 +146,9 @@ async function pullSecrets(vaultKey, environment, vaultUrl, deviceSecret) {
     const err = await resp.text().catch(() => '');
     if (resp.status === 403) {
       const msg = err.includes('pending')
-        ? 'Device not yet approved. Ask the project owner to run: vault-env approve-device'
-        : 'Device not registered. Run: vault-env register-device';
-      throw new Error(`[vault-env] ${msg}`);
+        ? 'Device not yet approved. Ask the project owner to run: vaultdotenv approve-device'
+        : 'Device not registered. Run: vaultdotenv register-device';
+      throw new Error(`[vaultdotenv] ${msg}`);
     }
     throw new Error(`Vault pull failed (${resp.status}): ${err}`);
   }
@@ -293,9 +293,9 @@ async function config(options = {}) {
     if (cache) {
       secrets = loadCache(vaultKey, path.dirname(envPath), deviceSecret);
       if (secrets) {
-        console.warn('[vault-env] Remote fetch failed, using cached secrets');
+        console.warn('[vaultdotenv] Remote fetch failed, using cached secrets');
       } else {
-        throw new Error(`[vault-env] Failed to fetch secrets and no cache available: ${err.message}`);
+        throw new Error(`[vaultdotenv] Failed to fetch secrets and no cache available: ${err.message}`);
       }
     } else {
       throw err;
@@ -352,7 +352,7 @@ function configSync(options = {}) {
   }
 
   // No cache — load local .env as fallback
-  console.warn('[vault-env] No cache available, falling back to local .env');
+  console.warn('[vaultdotenv] No cache available, falling back to local .env');
   for (const [key, val] of Object.entries(localEnv)) {
     if (!override && process.env[key] !== undefined) continue;
     process.env[key] = val;
@@ -409,7 +409,7 @@ function watch(options = {}) {
   // Need VAULT_KEY to be loaded already (config() must have been called)
   const vaultKey = process.env.VAULT_KEY;
   if (!vaultKey) {
-    throw new Error('[vault-env] watch() requires VAULT_KEY — call config() first');
+    throw new Error('[vaultdotenv] watch() requires VAULT_KEY — call config() first');
   }
 
   const parsed = parseVaultKey(vaultKey);
@@ -456,7 +456,7 @@ function watch(options = {}) {
       if (onError) {
         onError(err);
       } else {
-        console.warn(`[vault-env] Watch poll failed: ${err.message}`);
+        console.warn(`[vaultdotenv] Watch poll failed: ${err.message}`);
       }
     }
   }

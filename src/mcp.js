@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * vault-env MCP Server — stdio transport for Claude Code integration.
+ * vaultdotenv MCP Server — stdio transport for Claude Code integration.
  *
  * Reads VAULT_KEY from .env in the current directory and device secret
  * from ~/.vault/<projectId>.key. Same credentials as the CLI.
@@ -348,7 +348,7 @@ async function handleMessage(line) {
         id,
         result: {
           protocolVersion: '2024-11-05',
-          serverInfo: { name: 'vault-env', version: '0.1.0' },
+          serverInfo: { name: 'vaultdotenv', version: '0.1.0' },
           capabilities: { tools: {} },
         },
       });
