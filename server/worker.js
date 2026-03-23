@@ -1028,16 +1028,8 @@ async function dashboardGetPlan(env, user, corsHeaders) {
 }
 
 async function dashboardUpgradePlan(request, env, user, corsHeaders) {
-  const { plan } = await request.json();
-
-  if (!['free', 'pro', 'team'].includes(plan)) {
-    return Response.json({ error: 'Invalid plan' }, { status: 400, headers: corsHeaders });
-  }
-
-  // TODO: Stripe integration — for now just update the plan directly
-  await env.DB.prepare('UPDATE users SET plan = ? WHERE id = ?').bind(plan, user.id).run();
-
-  return Response.json({ plan }, { headers: corsHeaders });
+  // Disabled until Stripe is integrated
+  return Response.json({ error: 'Plan changes are not yet available. Contact support.' }, { status: 403, headers: corsHeaders });
 }
 
 // ── Invite Handlers ────────────────────────────────────────────────────────
