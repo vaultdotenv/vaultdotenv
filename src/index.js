@@ -173,6 +173,7 @@ async function pushSecrets(vaultKey, environment, secrets, vaultUrl, deviceSecre
     project_id: parsed.projectId,
     environment,
     secrets: encryptedSecrets,
+    key_names: Object.keys(secrets),
     device_hash: deviceSecret ? hashDeviceSecret(deviceSecret) : undefined,
   });
   const { signature } = sign(vaultKey, body);

@@ -391,7 +391,7 @@ async function handlePull(request, env, corsHeaders) {
 async function handlePush(request, env, corsHeaders) {
   const body = await request.text();
   const sig = request.headers.get('X-Vault-Signature') || '';
-  const { project_id, environment, secrets, device_hash } = JSON.parse(body);
+  const { project_id, environment, secrets, key_names, device_hash } = JSON.parse(body);
 
   // Get project
   const project = await env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(project_id).first();
@@ -432,10 +432,11 @@ async function handlePush(request, env, corsHeaders) {
   ).bind(envRow.id).first();
   const nextVersion = (latest?.max_version || 0) + 1;
 
-  // Store encrypted blob
+  // Store encrypted blob + key names
+  const changedKeys = key_names ? JSON.stringify(key_names) : null;
   await env.DB.prepare(
-    'INSERT INTO secret_versions (environment_id, version, encrypted_blob, created_at) VALUES (?, ?, ?, ?)'
-  ).bind(envRow.id, nextVersion, secrets, new Date().toISOString()).run();
+    'INSERT INTO secret_versions (environment_id, version, encrypted_blob, changed_keys, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(envRow.id, nextVersion, secrets, changedKeys, new Date().toISOString()).run();
 
   // Audit log
   await env.DB.prepare(

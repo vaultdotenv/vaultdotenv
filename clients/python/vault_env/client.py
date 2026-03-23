@@ -118,6 +118,7 @@ def push_secrets(
         "project_id": parsed["project_id"],
         "environment": environment,
         "secrets": encrypted_secrets,
+        "key_names": list(secrets.keys()),
     }
     if device_secret:
         body_dict["device_hash"] = hash_device_secret(device_secret)
