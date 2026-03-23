@@ -13,6 +13,7 @@
  *   users(id, email, password_hash, created_at)
  *   sessions(id, user_id, expires_at, created_at)
  *   user_projects(user_id, project_id, role, created_at)
+ *   reveal_tokens(id, project_id, user_id, expires_at, used_at, created_at)
  */
 
 const HMAC_MAX_AGE_MS = 300_000; // 5 minutes
@@ -111,6 +112,9 @@ export default {
       }
       if (path === '/api/v1/secrets/rollback' && request.method === 'POST') {
         return handleRollback(request, env, corsHeaders);
+      }
+      if (path === '/api/v1/reveal-token/validate' && request.method === 'POST') {
+        return handleRevealTokenValidate(request, env, corsHeaders);
       }
       if (path === '/health') {
         return Response.json({ status: 'ok', ts: Date.now() }, { headers: corsHeaders });
@@ -724,6 +728,11 @@ async function handleDashboard(request, env, corsHeaders, path) {
     if (revokeMatch && method === 'POST') {
       return dashboardRevokeDevice(env, projectId, revokeMatch[1], corsHeaders);
     }
+
+    // /projects/:id/reveal-token
+    if (sub === '/reveal-token' && method === 'POST') {
+      return dashboardCreateRevealToken(env, user, projectId, corsHeaders);
+    }
   }
 
   return Response.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
@@ -1183,4 +1192,70 @@ async function dashboardRemoveMember(env, projectId, targetUserId, currentUserId
   ).bind(targetUserId, projectId).run();
 
   return Response.json({ ok: true }, { headers: corsHeaders });
+}
+
+// ── Reveal Token Handlers ─────────────────────────────────────────────────
+
+const REVEAL_TOKEN_TTL_MS = 60_000; // 60 seconds
+
+async function dashboardCreateRevealToken(env, user, projectId, corsHeaders) {
+  const id = 'rt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 24);
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + REVEAL_TOKEN_TTL_MS).toISOString();
+
+  await env.DB.prepare(
+    'INSERT INTO reveal_tokens (id, project_id, user_id, expires_at, used_at, created_at) VALUES (?, ?, ?, ?, NULL, ?)'
+  ).bind(id, projectId, user.id, expiresAt, now).run();
+
+  // Audit log
+  await env.DB.prepare(
+    'INSERT INTO audit_log (id, project_id, action, ip, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(crypto.randomUUID(), projectId, 'reveal_token_created', '', '', now).run();
+
+  return Response.json({ token: id, expires_at: expiresAt }, { headers: corsHeaders });
+}
+
+async function handleRevealTokenValidate(request, env, corsHeaders) {
+  const body = await request.text();
+  const { project_id, token } = JSON.parse(body);
+
+  if (!project_id || !token) {
+    return Response.json({ error: 'project_id and token required' }, { status: 400, headers: corsHeaders });
+  }
+
+  // Verify VAULT_KEY signature
+  const sigHeader = request.headers.get('X-Vault-Signature');
+  const project = await env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(project_id).first();
+  if (!project) {
+    return Response.json({ error: 'Project not found' }, { status: 404, headers: corsHeaders });
+  }
+
+  const sigResult = await verifySignature(body, sigHeader, project.key_hash);
+  if (!sigResult.valid) {
+    return Response.json({ error: 'Invalid signature' }, { status: 403, headers: corsHeaders });
+  }
+
+  // Validate token
+  const row = await env.DB.prepare(
+    'SELECT * FROM reveal_tokens WHERE id = ? AND project_id = ?'
+  ).bind(token, project_id).first();
+
+  if (!row) {
+    return Response.json({ valid: false, reason: 'not_found' }, { headers: corsHeaders });
+  }
+
+  if (row.used_at) {
+    return Response.json({ valid: false, reason: 'already_used' }, { headers: corsHeaders });
+  }
+
+  if (new Date(row.expires_at) < new Date()) {
+    return Response.json({ valid: false, reason: 'expired' }, { headers: corsHeaders });
+  }
+
+  // Mark as used (single-use)
+  await env.DB.prepare(
+    'UPDATE reveal_tokens SET used_at = ? WHERE id = ?'
+  ).bind(new Date().toISOString(), token).run();
+
+  return Response.json({ valid: true }, { headers: corsHeaders });
 }
