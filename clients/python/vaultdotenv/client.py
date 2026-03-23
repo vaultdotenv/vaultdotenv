@@ -8,8 +8,8 @@ from pathlib import Path
 
 import httpx
 
-from vault_env.crypto import decrypt, encrypt, hash_device_secret, parse_vault_key, sign
-from vault_env.device import load_device_secret
+from vaultdotenv.crypto import decrypt, encrypt, hash_device_secret, parse_vault_key, sign
+from vaultdotenv.device import load_device_secret
 
 DEFAULT_VAULT_URL = "https://api.vaultdotenv.io"
 CACHE_FILE = ".vault-cache"

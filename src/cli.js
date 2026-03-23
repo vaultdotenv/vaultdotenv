@@ -18,6 +18,18 @@ function getFlag(name) {
 }
 
 function getVaultKey() {
+  // --project flag: look for key in ~/.vault/keys/<project>.key
+  const projectName = getFlag('project');
+  if (projectName) {
+    const keyPath = path.join(os.homedir(), '.vault', 'keys', `${projectName}.key`);
+    if (fs.existsSync(keyPath)) {
+      return fs.readFileSync(keyPath, 'utf8').trim();
+    }
+    console.error(`Error: No vault key found for project "${projectName}". Expected at ${keyPath}`);
+    console.error('Save it with: vde key save --project myapp --key vk_...');
+    process.exit(1);
+  }
+
   let key = process.env.VAULT_KEY;
   if (!key) {
     const envPath = path.resolve(process.cwd(), '.env');
@@ -28,6 +40,7 @@ function getVaultKey() {
   }
   if (!key) {
     console.error('Error: VAULT_KEY not found in environment or .env file');
+    console.error('Tip: Use --project <name> if you saved the key with: vde key save');
     process.exit(1);
   }
   return key;
@@ -49,6 +62,63 @@ async function main() {
   }
 
   switch (command) {
+    case 'key': {
+      const subCmd = args[1];
+      const keysDir = path.join(os.homedir(), '.vault', 'keys');
+
+      if (subCmd === 'save') {
+        const projectName = getFlag('project');
+        const vaultKey = getFlag('key');
+        if (!projectName || !vaultKey) {
+          console.error('Usage: vaultdotenv key save --project myapp --key vk_...');
+          process.exit(1);
+        }
+        if (!fs.existsSync(keysDir)) {
+          fs.mkdirSync(keysDir, { mode: 0o700, recursive: true });
+        }
+        fs.writeFileSync(path.join(keysDir, `${projectName}.key`), vaultKey + '\n', { mode: 0o600 });
+        console.log(`Saved vault key for "${projectName}" to ~/.vault/keys/${projectName}.key`);
+      } else if (subCmd === 'list') {
+        if (!fs.existsSync(keysDir)) {
+          console.log('No saved keys.');
+          break;
+        }
+        const files = fs.readdirSync(keysDir).filter(f => f.endsWith('.key'));
+        if (files.length === 0) {
+          console.log('No saved keys.');
+        } else {
+          console.log('Saved project keys:\n');
+          for (const f of files) {
+            console.log(`  ${f.replace('.key', '')}`);
+          }
+        }
+      } else if (subCmd === 'remove') {
+        const projectName = getFlag('project');
+        if (!projectName) {
+          console.error('Usage: vaultdotenv key remove --project myapp');
+          process.exit(1);
+        }
+        const keyPath = path.join(keysDir, `${projectName}.key`);
+        if (fs.existsSync(keyPath)) {
+          fs.unlinkSync(keyPath);
+          console.log(`Removed vault key for "${projectName}".`);
+        } else {
+          console.error(`No saved key for "${projectName}".`);
+        }
+      } else {
+        console.log(`
+Key management:
+  vaultdotenv key save --project myapp --key vk_...   Save a vault key
+  vaultdotenv key list                                 List saved keys
+  vaultdotenv key remove --project myapp               Remove a saved key
+
+Once saved, use --project to target:
+  vaultdotenv pull --project myapp --env production
+`);
+      }
+      break;
+    }
+
     case 'init': {
       const projectName = getFlag('name') || path.basename(process.cwd());
       const vaultUrl = getVaultUrl();
@@ -503,10 +573,16 @@ Device management:
   vaultdotenv list-devices            List all registered devices
   vaultdotenv revoke-device --id X    Revoke a device's access
 
+Key management:
+  vaultdotenv key save --project X --key vk_...  Save a vault key locally
+  vaultdotenv key list                            List saved project keys
+  vaultdotenv key remove --project X              Remove a saved key
+
 MCP server:
   vaultdotenv mcp                    Start MCP server (stdio) for Claude Code
 
 Options:
+  --project <name>  Use saved key for project (from key save)
   --env <name>      Environment (default: NODE_ENV or development)
   --url <url>       Vault server URL (default: api.vaultdotenv.io)
   --file <path>     Source .env file for push (default: .env)

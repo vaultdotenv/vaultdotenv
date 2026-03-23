@@ -4,6 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "vaultdotenv"
+packages = [{include = "vaultdotenv"}]
 version = "0.1.0"
 description = "Drop-in python-dotenv replacement. One master key locally, everything else encrypted remotely."
 requires-python = ">=3.10"

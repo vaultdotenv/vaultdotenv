@@ -54,7 +54,7 @@ Your `.env` file has 30 secrets. Every developer has a copy. Every server has a 
 # Node.js
 npm install vaultdotenv
 
-# Python — copy the vault_env/ directory into your project
+# Python — copy the vaultdotenv/ directory into your project
 # (pip package coming soon)
 ```
 
@@ -88,7 +88,7 @@ Reads your `.env` file, encrypts every key-value pair (except `VAULT_KEY` itself
 # Python
 - from dotenv import load_dotenv
 - load_dotenv()
-+ from vault_env import load_vault
++ from vaultdotenv import load_vault
 + load_vault()
 ```
 
@@ -183,7 +183,7 @@ If there's no `VAULT_KEY` in the environment or `.env` file, vaultdotenv behaves
 
 ### Installation
 
-Copy the `clients/python/vault_env/` directory into your project. Requires `cryptography` and `httpx`:
+Copy the `clients/python/vaultdotenv/` directory into your project. Requires `cryptography` and `httpx`:
 
 ```bash
 pip install cryptography httpx
@@ -192,7 +192,7 @@ pip install cryptography httpx
 ### Basic Usage
 
 ```python
-from vault_env import load_vault
+from vaultdotenv import load_vault
 
 # Pulls secrets from vault and injects into os.environ
 load_vault()
@@ -210,7 +210,7 @@ load_vault(
 ### Synchronous / Cache-Only Mode
 
 ```python
-from vault_env import load_vault_sync
+from vaultdotenv import load_vault_sync
 
 # Reads from local encrypted cache only — no network call
 load_vault_sync()
@@ -223,7 +223,7 @@ Replace `python-dotenv` with a safe fallback:
 ```python
 # config.py
 try:
-    from vault_env import load_vault
+    from vaultdotenv import load_vault
     load_vault()
 except Exception:
     from dotenv import load_dotenv
@@ -400,18 +400,18 @@ vault.unwatch();
 ### Python
 
 ```python
-import vault_env
+import vaultdotenv
 
-vault_env.load_vault()
+vaultdotenv.load_vault()
 
-vault_env.watch(
+vaultdotenv.watch(
     interval=30.0,  # seconds
     on_change=lambda changed, all_secrets: print("Updated:", list(changed.keys())),
     on_error=lambda err: print(f"Error: {err}"),
 )
 
 # Stop watching
-vault_env.unwatch()
+vaultdotenv.unwatch()
 ```
 
 ### How Watching Works

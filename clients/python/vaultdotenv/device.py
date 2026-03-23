@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 
-from vault_env.crypto import (
+from vaultdotenv.crypto import (
     generate_device_secret,
     hash_device_secret,
     parse_vault_key,
