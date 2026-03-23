@@ -413,6 +413,24 @@ async function handlePush(request, env, corsHeaders) {
     }
   }
 
+  // Enforce secret count limit
+  if (key_names) {
+    const ownerRow = await env.DB.prepare(
+      'SELECT user_id FROM user_projects WHERE project_id = ? AND role = ?'
+    ).bind(project_id, 'owner').first();
+    if (ownerRow) {
+      const userRow = await env.DB.prepare('SELECT plan FROM users WHERE id = ?').bind(ownerRow.user_id).first();
+      const plan = userRow?.plan || 'free';
+      const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+      if (limits.secrets !== -1 && key_names.length > limits.secrets) {
+        return Response.json(
+          { error: `Secret limit exceeded: ${key_names.length} secrets, plan allows ${limits.secrets}. Upgrade at app.vaultdotenv.io` },
+          { status: 403, headers: corsHeaders }
+        );
+      }
+    }
+  }
+
   // Get or create environment
   let envRow = await env.DB.prepare(
     'SELECT * FROM environments WHERE project_id = ? AND name = ?'
@@ -432,11 +450,12 @@ async function handlePush(request, env, corsHeaders) {
   ).bind(envRow.id).first();
   const nextVersion = (latest?.max_version || 0) + 1;
 
-  // Store encrypted blob + key names
+  // Store encrypted blob + key names + count
   const changedKeys = key_names ? JSON.stringify(key_names) : null;
+  const keyCount = key_names ? key_names.length : 0;
   await env.DB.prepare(
-    'INSERT INTO secret_versions (environment_id, version, encrypted_blob, changed_keys, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).bind(envRow.id, nextVersion, secrets, changedKeys, new Date().toISOString()).run();
+    'INSERT INTO secret_versions (environment_id, version, encrypted_blob, changed_keys, key_count, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(envRow.id, nextVersion, secrets, changedKeys, keyCount, new Date().toISOString()).run();
 
   // Audit log
   await env.DB.prepare(
@@ -965,7 +984,7 @@ async function dashboardListAudit(request, env, projectId, corsHeaders) {
 const PLAN_LIMITS = {
   free:  { secrets: 10, environments: 2, projects: 1,  devices: 2  },
   pro:   { secrets: 30, environments: 3, projects: 3,  devices: 5  },
-  team:  { secrets: 100, environments: -1, projects: 10, devices: -1 }, // -1 = unlimited
+  team:  { secrets: -1, environments: -1, projects: 10, devices: -1 }, // -1 = unlimited
 };
 
 async function getUserPlanUsage(env, userId) {
@@ -991,14 +1010,12 @@ async function getUserPlanUsage(env, userId) {
 
   // Max secrets in any single environment (limit is per-env)
   const maxSecrets = await env.DB.prepare(`
-    SELECT MAX(key_count) as max_keys FROM (
-      SELECT CASE WHEN sv.changed_keys IS NOT NULL THEN json_array_length(sv.changed_keys) ELSE 0 END as key_count
-      FROM secret_versions sv
-      JOIN environments e ON sv.environment_id = e.id
-      JOIN user_projects up ON e.project_id = up.project_id
-      WHERE up.user_id = ?
-        AND sv.version = (SELECT MAX(version) FROM secret_versions WHERE environment_id = sv.environment_id)
-    )
+    SELECT MAX(sv.key_count) as max_keys
+    FROM secret_versions sv
+    JOIN environments e ON sv.environment_id = e.id
+    JOIN user_projects up ON e.project_id = up.project_id
+    WHERE up.user_id = ?
+      AND sv.version = (SELECT MAX(version) FROM secret_versions WHERE environment_id = sv.environment_id)
   `).bind(userId).first();
 
   return {
