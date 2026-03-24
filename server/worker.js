@@ -17,6 +17,92 @@
  */
 
 const HMAC_MAX_AGE_MS = 300_000; // 5 minutes
+const DASHBOARD_URL = 'https://app.vaultdotenv.io';
+
+// ── Email (Resend) ──────────────────────────────────────────────────────────
+
+async function sendEmail(env, { to, subject, html }) {
+  if (!env.RESEND_API_KEY) {
+    console.log(`[email] Skipped (no RESEND_API_KEY): to=${to} subject=${subject}`);
+    return { sent: false, reason: 'no_api_key' };
+  }
+
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'vaultdotenv <noreply@vaultdotenv.io>',
+      to: [to],
+      subject,
+      html,
+    }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text().catch(() => '');
+    console.log(`[email] Failed: ${resp.status} ${err}`);
+    return { sent: false, reason: err };
+  }
+
+  return { sent: true };
+}
+
+function inviteEmailHtml(inviterEmail, projectName, role, acceptUrl) {
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <div style="text-align: center; margin-bottom: 32px;">
+        <div style="display: inline-block; background: #0d6efd; border-radius: 12px; padding: 12px; margin-bottom: 16px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <h1 style="font-size: 20px; font-weight: 700; color: #1a202c; margin: 0;">You've been invited</h1>
+      </div>
+      <p style="font-size: 15px; color: #2d3748; line-height: 1.6;">
+        <strong>${inviterEmail}</strong> has invited you to join <strong>${projectName}</strong> as a <strong>${role}</strong> on vaultdotenv.
+      </p>
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="${acceptUrl}" style="display: inline-block; background: #0d6efd; color: white; text-decoration: none; font-weight: 600; font-size: 15px; padding: 12px 32px; border-radius: 8px;">
+          Accept Invitation
+        </a>
+      </div>
+      <p style="font-size: 13px; color: #a0aec0; text-align: center;">
+        This invite expires in 7 days. If you didn't expect this email, you can safely ignore it.
+      </p>
+    </div>
+  `;
+}
+
+function orgInviteEmailHtml(inviterEmail, orgName, role) {
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <div style="text-align: center; margin-bottom: 32px;">
+        <div style="display: inline-block; background: #0d6efd; border-radius: 12px; padding: 12px; margin-bottom: 16px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <h1 style="font-size: 20px; font-weight: 700; color: #1a202c; margin: 0;">You've been invited</h1>
+      </div>
+      <p style="font-size: 15px; color: #2d3748; line-height: 1.6;">
+        <strong>${inviterEmail}</strong> has invited you to join the <strong>${orgName}</strong> organization as a <strong>${role}</strong> on vaultdotenv.
+      </p>
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="${DASHBOARD_URL}/signup" style="display: inline-block; background: #0d6efd; color: white; text-decoration: none; font-weight: 600; font-size: 15px; padding: 12px 32px; border-radius: 8px;">
+          Create Account
+        </a>
+      </div>
+      <p style="font-size: 13px; color: #a0aec0; text-align: center;">
+        Once you create an account, you'll automatically be added to the organization.
+      </p>
+    </div>
+  `;
+}
 
 // ── Signature Verification ───────────────────────────────────────────────────
 
@@ -1233,8 +1319,15 @@ async function dashboardCreateInvite(request, env, user, projectId, userRole, co
     'INSERT INTO invites (id, project_id, email, role, invited_by, status, token, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(id, projectId, email.toLowerCase(), inviteRole, user.id, 'pending', token, now.toISOString(), expiresAt.toISOString()).run();
 
-  // TODO: Send invite email via Resend
-  // For now, return the token so it can be shared manually
+  // Send invite email
+  const project = await env.DB.prepare('SELECT name FROM projects WHERE id = ?').bind(projectId).first();
+  const acceptUrl = `${DASHBOARD_URL}/invites/accept?token=${token}`;
+  await sendEmail(env, {
+    to: email.toLowerCase(),
+    subject: `You've been invited to ${project?.name || 'a project'} on vaultdotenv`,
+    html: inviteEmailHtml(user.email, project?.name || 'a project', inviteRole, acceptUrl),
+  });
+
   return Response.json({
     invite_id: id,
     token,
@@ -1617,8 +1710,15 @@ async function dashboardInviteOrgMember(request, env, user, orgId, userRole, cor
     return Response.json({ status: 'added', email: email.toLowerCase() }, { headers: corsHeaders });
   }
 
-  // TODO: User doesn't exist yet — send invite email via Resend
-  return Response.json({ status: 'invite_pending', email: email.toLowerCase(), message: 'User not found. Email invite will be sent when email integration is enabled.' }, { headers: corsHeaders });
+  // User doesn't exist yet — send invite email
+  const org = await env.DB.prepare('SELECT name FROM orgs WHERE id = ?').bind(orgId).first();
+  await sendEmail(env, {
+    to: email.toLowerCase(),
+    subject: `You've been invited to ${org?.name || 'an organization'} on vaultdotenv`,
+    html: orgInviteEmailHtml(user.email, org?.name || 'an organization', inviteRole),
+  });
+
+  return Response.json({ status: 'invite_sent', email: email.toLowerCase() }, { headers: corsHeaders });
 }
 
 async function dashboardRemoveOrgMember(env, orgId, targetUserId, currentUserId, currentRole, corsHeaders) {
