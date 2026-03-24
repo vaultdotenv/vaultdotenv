@@ -614,14 +614,26 @@ async function requireSession(env, request, corsHeaders) {
   return { user, error: null };
 }
 
-async function requireProjectAccess(env, userId, projectId, corsHeaders) {
+async function requireProjectAccess(env, userId, projectId, corsHeaders, minPermission) {
   const row = await env.DB.prepare(
     'SELECT * FROM user_projects WHERE user_id = ? AND project_id = ?'
   ).bind(userId, projectId).first();
   if (!row) {
     return { ok: false, error: Response.json({ error: 'Project not found' }, { status: 404, headers: corsHeaders }) };
   }
-  return { ok: true, role: row.role, error: null };
+
+  // Check permission level if required
+  if (minPermission) {
+    const levels = { read: 0, write: 1, admin: 2 };
+    const userLevel = levels[row.permission] ?? 0;
+    const requiredLevel = levels[minPermission] ?? 0;
+    if (userLevel < requiredLevel) {
+      return { ok: false, error: Response.json({ error: `Requires ${minPermission} permission` }, { status: 403, headers: corsHeaders }) };
+    }
+  }
+
+  const envScope = row.env_scope ? JSON.parse(row.env_scope) : null;
+  return { ok: true, role: row.role, permission: row.permission || 'admin', envScope, error: null };
 }
 
 async function requireOrgAccess(env, userId, orgId, corsHeaders) {
@@ -768,9 +780,11 @@ async function handleDashboard(request, env, corsHeaders, path) {
       return Response.json({ error: 'Not found' }, { status: 404, headers: corsHeaders });
     }
 
-    const access = await requireProjectAccess(env, user.id, projectId, corsHeaders);
+    // read access = minimum to see the project
+    const access = await requireProjectAccess(env, user.id, projectId, corsHeaders, 'read');
     if (!access.ok) return access.error;
 
+    // ── Read-level routes (read+) ─────────────────────────────────────────
     if (sub === '' && method === 'GET') {
       return dashboardGetProject(env, projectId, corsHeaders);
     }
@@ -783,47 +797,69 @@ async function handleDashboard(request, env, corsHeaders, path) {
     if (sub === '/audit' && method === 'GET') {
       return dashboardListAudit(request, env, projectId, corsHeaders);
     }
-
-    // Invites
-    if (sub === '/invites' && method === 'GET') {
-      return dashboardListInvites(env, projectId, corsHeaders);
-    }
-    if (sub === '/invites' && method === 'POST') {
-      return dashboardCreateInvite(request, env, user, projectId, access.role, corsHeaders);
-    }
-
-    // /projects/:id/invites/:inviteId/revoke
-    const revokeInviteMatch = sub.match(/^\/invites\/([^/]+)\/revoke$/);
-    if (revokeInviteMatch && method === 'POST') {
-      return dashboardRevokeInvite(env, projectId, revokeInviteMatch[1], corsHeaders);
-    }
-
-    // Members
     if (sub === '/members' && method === 'GET') {
       return dashboardListMembers(env, projectId, corsHeaders);
     }
-
-    // /projects/:id/members/:userId/remove
-    const removeMemberMatch = sub.match(/^\/members\/([^/]+)\/remove$/);
-    if (removeMemberMatch && method === 'POST') {
-      return dashboardRemoveMember(env, projectId, removeMemberMatch[1], user.id, corsHeaders);
+    if (sub === '/invites' && method === 'GET') {
+      return dashboardListInvites(env, projectId, corsHeaders);
     }
 
     // /projects/:id/environments/:env/versions
     const versionsMatch = sub.match(/^\/environments\/([^/]+)\/versions$/);
     if (versionsMatch && method === 'GET') {
+      // Check env_scope if set
+      if (access.envScope && !access.envScope.includes(versionsMatch[1])) {
+        return Response.json({ error: `No access to ${versionsMatch[1]} environment` }, { status: 403, headers: corsHeaders });
+      }
       return dashboardListVersions(env, projectId, versionsMatch[1], corsHeaders);
     }
 
-    // /projects/:id/devices/:deviceId/approve
+    // ── Admin-level routes (admin only) ───────────────────────────────────
+    if (sub === '/invites' && method === 'POST') {
+      if (access.permission !== 'admin') {
+        return Response.json({ error: 'Requires admin permission' }, { status: 403, headers: corsHeaders });
+      }
+      return dashboardCreateInvite(request, env, user, projectId, access.role, corsHeaders);
+    }
+
+    const revokeInviteMatch = sub.match(/^\/invites\/([^/]+)\/revoke$/);
+    if (revokeInviteMatch && method === 'POST') {
+      if (access.permission !== 'admin') {
+        return Response.json({ error: 'Requires admin permission' }, { status: 403, headers: corsHeaders });
+      }
+      return dashboardRevokeInvite(env, projectId, revokeInviteMatch[1], corsHeaders);
+    }
+
+    const removeMemberMatch = sub.match(/^\/members\/([^/]+)\/remove$/);
+    if (removeMemberMatch && method === 'POST') {
+      if (access.permission !== 'admin') {
+        return Response.json({ error: 'Requires admin permission' }, { status: 403, headers: corsHeaders });
+      }
+      return dashboardRemoveMember(env, projectId, removeMemberMatch[1], user.id, corsHeaders);
+    }
+
+    // /projects/:id/members/:userId/permissions
+    const permMatch = sub.match(/^\/members\/([^/]+)\/permissions$/);
+    if (permMatch && method === 'POST') {
+      if (access.permission !== 'admin') {
+        return Response.json({ error: 'Requires admin permission' }, { status: 403, headers: corsHeaders });
+      }
+      return dashboardUpdatePermissions(request, env, projectId, permMatch[1], corsHeaders);
+    }
+
     const approveMatch = sub.match(/^\/devices\/([^/]+)\/approve$/);
     if (approveMatch && method === 'POST') {
+      if (access.permission !== 'admin') {
+        return Response.json({ error: 'Requires admin permission' }, { status: 403, headers: corsHeaders });
+      }
       return dashboardApproveDevice(env, projectId, approveMatch[1], corsHeaders);
     }
 
-    // /projects/:id/devices/:deviceId/revoke
     const revokeMatch = sub.match(/^\/devices\/([^/]+)\/revoke$/);
     if (revokeMatch && method === 'POST') {
+      if (access.permission !== 'admin') {
+        return Response.json({ error: 'Requires admin permission' }, { status: 403, headers: corsHeaders });
+      }
       return dashboardRevokeDevice(env, projectId, revokeMatch[1], corsHeaders);
     }
 
@@ -1303,7 +1339,7 @@ async function dashboardListMyInvites(env, user, corsHeaders) {
 
 async function dashboardListMembers(env, projectId, corsHeaders) {
   const members = await env.DB.prepare(`
-    SELECT u.id, u.email, up.role, up.created_at
+    SELECT u.id, u.email, up.role, up.permission, up.env_scope, up.created_at
     FROM user_projects up
     JOIN users u ON up.user_id = u.id
     WHERE up.project_id = ?
@@ -1311,6 +1347,49 @@ async function dashboardListMembers(env, projectId, corsHeaders) {
   `).bind(projectId).all();
 
   return Response.json({ members: members.results }, { headers: corsHeaders });
+}
+
+async function dashboardUpdatePermissions(request, env, projectId, targetUserId, corsHeaders) {
+  const { permission, env_scope } = await request.json();
+
+  if (permission && !['read', 'write', 'admin'].includes(permission)) {
+    return Response.json({ error: 'Invalid permission. Must be read, write, or admin.' }, { status: 400, headers: corsHeaders });
+  }
+
+  if (env_scope !== undefined && env_scope !== null && !Array.isArray(env_scope)) {
+    return Response.json({ error: 'env_scope must be an array of environment names or null' }, { status: 400, headers: corsHeaders });
+  }
+
+  const target = await env.DB.prepare(
+    'SELECT * FROM user_projects WHERE user_id = ? AND project_id = ?'
+  ).bind(targetUserId, projectId).first();
+  if (!target) {
+    return Response.json({ error: 'Member not found' }, { status: 404, headers: corsHeaders });
+  }
+
+  const updates = [];
+  const binds = [];
+  if (permission) {
+    updates.push('permission = ?');
+    binds.push(permission);
+  }
+  if (env_scope !== undefined) {
+    updates.push('env_scope = ?');
+    binds.push(env_scope ? JSON.stringify(env_scope) : null);
+  }
+
+  if (updates.length > 0) {
+    binds.push(targetUserId, projectId);
+    await env.DB.prepare(
+      `UPDATE user_projects SET ${updates.join(', ')} WHERE user_id = ? AND project_id = ?`
+    ).bind(...binds).run();
+  }
+
+  return Response.json({
+    user_id: targetUserId,
+    permission: permission || target.permission,
+    env_scope: env_scope !== undefined ? env_scope : (target.env_scope ? JSON.parse(target.env_scope) : null),
+  }, { headers: corsHeaders });
 }
 
 async function dashboardRemoveMember(env, projectId, targetUserId, currentUserId, corsHeaders) {

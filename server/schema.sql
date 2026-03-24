@@ -106,6 +106,8 @@ CREATE TABLE IF NOT EXISTS user_projects (
   user_id TEXT NOT NULL REFERENCES users(id),
   project_id TEXT NOT NULL REFERENCES projects(id),
   role TEXT NOT NULL DEFAULT 'owner',
+  permission TEXT NOT NULL DEFAULT 'admin',
+  env_scope TEXT DEFAULT NULL,
   created_at TEXT NOT NULL,
   PRIMARY KEY (user_id, project_id)
 );
