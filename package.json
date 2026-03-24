@@ -1,17 +1,43 @@
 {
-  "name": "vaultdotenv",
+  "name": "@vaultdotenv/cli",
   "version": "0.1.0",
   "description": "Drop-in dotenv replacement. One master key locally, everything else encrypted remotely.",
   "main": "src/index.js",
   "bin": {
-    "vaultdotenv": "./src/cli.js",
-    "vde": "./src/cli.js"
+    "vaultdotenv": "src/cli.js",
+    "vde": "src/cli.js"
   },
+  "files": [
+    "src/",
+    "README.md"
+  ],
   "scripts": {
     "test": "node test/test.js"
   },
-  "keywords": ["dotenv", "secrets", "vault", "env", "encryption", "config"],
+  "keywords": [
+    "dotenv",
+    "secrets",
+    "vault",
+    "env",
+    "encryption",
+    "config",
+    "environment-variables",
+    "secret-management",
+    "aes-256",
+    "zero-knowledge"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vaultdotenv/vaultdotenv"
+  },
+  "homepage": "https://vaultdotenv.io",
+  "bugs": {
+    "url": "https://github.com/vaultdotenv/vaultdotenv/issues"
+  },
   "author": "Matt Redman",
   "license": "MIT",
-  "type": "commonjs"
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

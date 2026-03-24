@@ -52,7 +52,7 @@ Your `.env` file has 30 secrets. Every developer has a copy. Every server has a 
 
 ```bash
 # Node.js
-npm install vaultdotenv
+npm install @vaultdotenv/cli
 
 # Python — copy the vaultdotenv/ directory into your project
 # (pip package coming soon)
@@ -61,7 +61,7 @@ npm install vaultdotenv
 ### 2. Create a project
 
 ```bash
-npx vaultdotenv init --name my-app
+npx @vaultdotenv/cli init --name my-app
 ```
 
 This does four things:
@@ -73,7 +73,7 @@ This does four things:
 ### 3. Push your secrets
 
 ```bash
-npx vaultdotenv push --env production
+npx @vaultdotenv/cli push --env production
 ```
 
 Reads your `.env` file, encrypts every key-value pair (except `VAULT_KEY` itself), and uploads the encrypted blob. The server never sees the plaintext.
@@ -83,7 +83,7 @@ Reads your `.env` file, encrypts every key-value pair (except `VAULT_KEY` itself
 ```diff
 # Node.js
 - require('dotenv').config()
-+ require('vaultdotenv').config()
++ require('@vaultdotenv/cli').config()
 
 # Python
 - from dotenv import load_dotenv
@@ -102,7 +102,7 @@ Done. Your app now loads secrets from the vault. If there's no `VAULT_KEY` in th
 ┌──────────────────────────────────┐
 │          Your Application        │
 │                                  │
-│  require('vaultdotenv').config()   │
+│  require('@vaultdotenv/cli').config()   │
 │         or load_vault()          │
 └──────────────┬───────────────────┘
                │
@@ -144,17 +144,17 @@ The server is a dumb encrypted storage layer. All cryptography happens on the cl
 ### Installation
 
 ```bash
-npm install vaultdotenv
+npm install @vaultdotenv/cli
 ```
 
 ### Basic Usage
 
 ```js
 // Async (recommended) — pulls fresh secrets from the vault
-await require('vaultdotenv').config();
+await require('@vaultdotenv/cli').config();
 
 // Options
-await require('vaultdotenv').config({
+await require('@vaultdotenv/cli').config({
   path: '.env',               // Path to .env file (default: .env)
   environment: 'production',  // Environment name (default: NODE_ENV or 'development')
   vaultUrl: 'https://...',    // Vault server URL (default: api.vaultdotenv.io)
@@ -168,7 +168,7 @@ await require('vaultdotenv').config({
 ```js
 // Sync — reads from local encrypted cache only (no network call)
 // Useful for scripts or tools that can't be async
-require('vaultdotenv').configSync();
+require('@vaultdotenv/cli').configSync();
 ```
 
 `configSync()` tries the local `.vault-cache` file first. If no cache exists, it falls back to the plain `.env` file. This is useful for development or situations where async isn't possible.
@@ -239,7 +239,7 @@ All commands read `VAULT_KEY` from the `VAULT_KEY` environment variable or from 
 ### Initialize a Project
 
 ```bash
-npx vaultdotenv init [--name my-project]
+npx @vaultdotenv/cli init [--name my-project]
 ```
 
 Creates the project on the server, generates the vault key, registers your machine as the first device (auto-approved), and writes `VAULT_KEY` to `.env`.
@@ -247,7 +247,7 @@ Creates the project on the server, generates the vault key, registers your machi
 ### Push Secrets
 
 ```bash
-npx vaultdotenv push [--env production] [--file .env.production]
+npx @vaultdotenv/cli push [--env production] [--file .env.production]
 ```
 
 Encrypts and uploads all key-value pairs from the specified file (default: `.env`). The `VAULT_KEY` itself is never pushed. Each push creates a new version.
@@ -255,7 +255,7 @@ Encrypts and uploads all key-value pairs from the specified file (default: `.env
 ### Pull Secrets
 
 ```bash
-npx vaultdotenv pull [--env staging] [--output .env.staging]
+npx @vaultdotenv/cli pull [--env staging] [--output .env.staging]
 ```
 
 Pulls and decrypts secrets from the vault. Without `--output`, prints masked values to stdout. With `--output`, writes the full `.env` file.
@@ -263,7 +263,7 @@ Pulls and decrypts secrets from the vault. Without `--output`, prints masked val
 ### List Versions
 
 ```bash
-npx vaultdotenv versions [--env production]
+npx @vaultdotenv/cli versions [--env production]
 ```
 
 Shows the version history for an environment, including timestamps and number of keys changed.
@@ -271,7 +271,7 @@ Shows the version history for an environment, including timestamps and number of
 ### Rollback
 
 ```bash
-npx vaultdotenv rollback --version 3 [--env production]
+npx @vaultdotenv/cli rollback --version 3 [--env production]
 ```
 
 Creates a new version with the contents of the specified old version. Non-destructive — the rollback itself is a new version, so you can always roll forward again.
@@ -279,10 +279,10 @@ Creates a new version with the contents of the specified old version. Non-destru
 ### Device Management
 
 ```bash
-npx vaultdotenv register-device [--name "CI Server"]
-npx vaultdotenv approve-device --id <device-uuid>
-npx vaultdotenv list-devices
-npx vaultdotenv revoke-device --id <device-uuid>
+npx @vaultdotenv/cli register-device [--name "CI Server"]
+npx @vaultdotenv/cli approve-device --id <device-uuid>
+npx @vaultdotenv/cli list-devices
+npx @vaultdotenv/cli revoke-device --id <device-uuid>
 ```
 
 See [Device Management](#device-management) for details.
@@ -350,12 +350,12 @@ Every project comes with three default environments: `development`, `staging`, a
 
 ```bash
 # Push to different environments
-npx vaultdotenv push --env development
-npx vaultdotenv push --env staging
-npx vaultdotenv push --env production
+npx @vaultdotenv/cli push --env development
+npx @vaultdotenv/cli push --env staging
+npx @vaultdotenv/cli push --env production
 
 # Pull from a specific environment
-npx vaultdotenv pull --env staging
+npx @vaultdotenv/cli pull --env staging
 ```
 
 ### Environment Resolution
@@ -375,7 +375,7 @@ Both clients support watching for secret changes and automatically updating the 
 ### Node.js
 
 ```js
-const vault = require('vaultdotenv');
+const vault = require('@vaultdotenv/cli');
 
 // Load secrets first
 await vault.config();
@@ -449,18 +449,18 @@ export ENVIRONMENT=production
 
 1. **Register a device** for the server (from any machine with the vault key):
    ```bash
-   npx vaultdotenv register-device --name "production-server"
+   npx @vaultdotenv/cli register-device --name "production-server"
    ```
    This outputs the device ID and saves the device secret to `~/.vault/`.
 
 2. **Approve the device**:
    ```bash
-   npx vaultdotenv approve-device --id <device-uuid>
+   npx @vaultdotenv/cli approve-device --id <device-uuid>
    ```
 
 3. **Push secrets** using the server's device secret (it's now in your `~/.vault/` file):
    ```bash
-   npx vaultdotenv push --env production
+   npx @vaultdotenv/cli push --env production
    ```
 
 4. **Copy the device secret** to the server as the `VAULT_DEVICE_SECRET` env var. The device secret is in `~/.vault/<projectId>.key`.
@@ -765,8 +765,8 @@ audit_log
 ### Node.js Client
 
 - Zero external dependencies (uses Node.js built-in `crypto`)
-- CommonJS module (`require('vaultdotenv')`)
-- CLI built into the package (`npx vaultdotenv`)
+- CommonJS module (`require('@vaultdotenv/cli')`)
+- CLI built into the package (`npx @vaultdotenv/cli`)
 
 ### Python Client
 
@@ -782,7 +782,7 @@ audit_log
 
 Your machine isn't registered for this project. Run:
 ```bash
-npx vaultdotenv register-device
+npx @vaultdotenv/cli register-device
 ```
 Then ask the project owner to approve it.
 
@@ -790,8 +790,8 @@ Then ask the project owner to approve it.
 
 Your device is registered but pending approval. The project owner needs to run:
 ```bash
-npx vaultdotenv list-devices          # Find the device ID
-npx vaultdotenv approve-device --id <uuid>
+npx @vaultdotenv/cli list-devices          # Find the device ID
+npx @vaultdotenv/cli approve-device --id <uuid>
 ```
 
 ### "Failed to fetch secrets and no cache available"
