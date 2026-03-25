@@ -98,6 +98,15 @@ export function welcomeEmailHtml(email) {
 <span style="color: #a0aec0;"># Push your secrets</span>
 <span style="color: #0d6efd;">$</span> vde push --env production</pre>
     </div>
+    <p style="font-size: 15px; color: #2d3748; line-height: 1.6;">Then replace your dotenv import:</p>
+    <div style="background: #1a202c; border-radius: 12px; padding: 20px; margin: 24px 0;">
+      <pre style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.8; color: #e2e8f0; overflow-x: auto;"><span style="color: #a0aec0;">// Node.js</span>
+require('@vaultdotenv/cli').config()
+
+<span style="color: #a0aec0;"># Python</span>
+from vaultdotenv import load_vault
+load_vault()</pre>
+    </div>
     <div style="text-align: center; margin: 32px 0;">
       <a href="${DASHBOARD_URL}/projects" style="display: inline-block; background: #0d6efd; color: white; text-decoration: none; font-weight: 600; font-size: 15px; padding: 12px 32px; border-radius: 8px;">Open Dashboard</a>
     </div>
