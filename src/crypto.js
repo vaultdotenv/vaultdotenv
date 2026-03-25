@@ -7,8 +7,6 @@ const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 const SALT_ENCRYPT = 'vault-encrypt-v1';
 const SALT_AUTH = 'vault-auth-v1';
-const SALT_DEVICE = 'vault-device-v1';
-
 /**
  * Derive a 256-bit key from the vault key using HKDF.
  * When deviceSecret is provided, the key material is HMAC(vaultKey, deviceSecret)
