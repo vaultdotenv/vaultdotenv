@@ -1327,6 +1327,18 @@ async function dashboardGetPlan(env, user, corsHeaders) {
 async function dashboardUpgradePlan(request, env, user, corsHeaders) {
   // Disabled until Stripe is integrated
   return Response.json({ error: 'Plan changes are not yet available. Contact support.' }, { status: 403, headers: corsHeaders });
+
+  // When enabled, sync plan to both user and personal org:
+  // const { plan } = await request.json();
+  // if (!['free', 'pro', 'team'].includes(plan)) {
+  //   return Response.json({ error: 'Invalid plan' }, { status: 400, headers: corsHeaders });
+  // }
+  // await env.DB.prepare('UPDATE users SET plan = ? WHERE id = ?').bind(plan, user.id).run();
+  // const personalOrg = await getPersonalOrg(env, user.id);
+  // if (personalOrg) {
+  //   await env.DB.prepare('UPDATE orgs SET plan = ? WHERE id = ?').bind(plan, personalOrg.id).run();
+  // }
+  // return Response.json({ plan }, { headers: corsHeaders });
 }
 
 // ── Invite Handlers ────────────────────────────────────────────────────────
