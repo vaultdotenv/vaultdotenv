@@ -62,6 +62,89 @@ async function main() {
   }
 
   switch (command) {
+    case 'login': {
+      const vaultUrl = getVaultUrl();
+
+      // Step 1: Start auth flow
+      console.log('Authenticating with vaultdotenv...\n');
+      const startResp = await fetch(`${vaultUrl}/api/v1/cli/auth/start`, { method: 'POST' });
+      if (!startResp.ok) {
+        console.error('Error: Failed to start auth flow');
+        process.exit(1);
+      }
+      const { code, auth_url } = await startResp.json();
+
+      // Step 2: Open browser
+      console.log(`Open this URL in your browser to authorize:\n`);
+      console.log(`  ${auth_url}\n`);
+      console.log(`Your code: ${code}\n`);
+
+      // Try to open browser automatically
+      const open = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+      require('child_process').exec(`${open} "${auth_url}"`);
+
+      console.log('Waiting for approval...');
+
+      // Step 3: Poll for approval
+      const maxAttempts = 120; // 10 minutes at 5s intervals
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+
+        const pollResp = await fetch(`${vaultUrl}/api/v1/cli/auth/poll?code=${code}`);
+        if (!pollResp.ok) continue;
+
+        const pollData = await pollResp.json();
+
+        if (pollData.status === 'approved') {
+          // Save auth token
+          const authDir = path.join(os.homedir(), '.vault');
+          if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { mode: 0o700, recursive: true });
+          const authPath = path.join(authDir, 'auth.json');
+          fs.writeFileSync(authPath, JSON.stringify({
+            token: pollData.token,
+            email: pollData.user?.email,
+            api_url: vaultUrl,
+          }, null, 2), { mode: 0o600 });
+
+          console.log(`\n✓ Logged in as ${pollData.user?.email}`);
+          console.log(`  Token saved to ~/.vault/auth.json`);
+          break;
+        }
+
+        if (pollData.status === 'expired') {
+          console.error('\nAuth code expired. Run vde login again.');
+          process.exit(1);
+        }
+
+        // Still pending — show a dot
+        process.stdout.write('.');
+      }
+      break;
+    }
+
+    case 'logout': {
+      const authPath = path.join(os.homedir(), '.vault', 'auth.json');
+      if (fs.existsSync(authPath)) {
+        fs.unlinkSync(authPath);
+        console.log('Logged out. Auth token removed.');
+      } else {
+        console.log('Not logged in.');
+      }
+      break;
+    }
+
+    case 'whoami': {
+      const authPath = path.join(os.homedir(), '.vault', 'auth.json');
+      if (!fs.existsSync(authPath)) {
+        console.log('Not logged in. Run: vde login');
+        break;
+      }
+      const auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+      console.log(`Logged in as ${auth.email}`);
+      console.log(`API: ${auth.api_url}`);
+      break;
+    }
+
     case 'key': {
       const subCmd = args[1];
       const keysDir = path.join(os.homedir(), '.vault', 'keys');
@@ -185,12 +268,37 @@ Once saved, use --project to target:
       console.log('Registering this device...');
       const deviceResult = await registerDevice(vaultKey, vaultUrl, require('os').hostname());
 
-      console.log(`\nProject created: ${projectName} (${serverId})`);
-      console.log(`Environments: ${environments.join(', ')}`);
-      console.log(`Device: ${deviceResult.status} (${deviceResult.deviceId})`);
-      console.log(`\nVAULT_KEY added to .env`);
-      console.log(`Device secret saved to ~/.vault/`);
-      console.log(`\nKey: ${vaultKey}`);
+      // 6. Link to dashboard account if logged in
+      const authPath = path.join(os.homedir(), '.vault', 'auth.json');
+      let linked = false;
+      if (fs.existsSync(authPath)) {
+        try {
+          const auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+          if (auth.token) {
+            const linkResp = await fetch(`${vaultUrl}/api/v1/dashboard/projects/link`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${auth.token}`,
+              },
+              body: JSON.stringify({ project_id: serverId }),
+            });
+            if (linkResp.ok) {
+              linked = true;
+              console.log(`Linked to dashboard account (${auth.email})`);
+            }
+          }
+        } catch {}
+      }
+
+      console.log(`\n✓ Project created: ${projectName} (${serverId})`);
+      console.log(`  Environments: ${environments.join(', ')}`);
+      console.log(`  Device: ${deviceResult.status} (${deviceResult.deviceId})`);
+      console.log(`  VAULT_KEY added to .env`);
+      console.log(`  Device secret saved to ~/.vault/`);
+      if (!linked) {
+        console.log(`\n  Tip: Run "vde login" to link this project to your dashboard`);
+      }
       console.log(`\nIMPORTANT: Add .vault-cache to your .gitignore`);
       break;
     }
@@ -555,6 +663,11 @@ Once saved, use --project to target:
     default:
       console.log(`
 vaultdotenv — Remote secrets manager, drop-in dotenv replacement
+
+Auth:
+  vaultdotenv login                    Log in via browser (links CLI to dashboard)
+  vaultdotenv logout                   Remove saved auth token
+  vaultdotenv whoami                   Show current logged-in user
 
 Usage:
   vaultdotenv init [--name project]   Initialize a new vault project

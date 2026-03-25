@@ -254,6 +254,16 @@ export default {
         return Response.json({ status: 'ok', ts: Date.now() }, { headers: corsHeaders });
       }
 
+      // ── CLI Auth ────────────────────────────────────────────────────────────
+      if (path === '/api/v1/cli/auth/start' && request.method === 'POST') {
+        return handleCliAuthStart(env, corsHeaders);
+      }
+      if (path === '/api/v1/cli/auth/poll' && request.method === 'GET') {
+        const url = new URL(request.url);
+        const code = url.searchParams.get('code');
+        return handleCliAuthPoll(env, code, corsHeaders);
+      }
+
       // ── Dashboard API ───────────────────────────────────────────────────────
       if (path.startsWith('/api/v1/dashboard/')) {
         return handleDashboard(request, env, corsHeaders, path);
@@ -821,6 +831,11 @@ async function handleDashboard(request, env, corsHeaders, path) {
     return Response.json({ ok: true }, { headers: corsHeaders });
   }
 
+  // CLI auth approve (user approves CLI access from dashboard)
+  if (path === '/api/v1/dashboard/cli-auth/approve' && method === 'POST') {
+    return handleCliAuthApprove(request, env, user, corsHeaders);
+  }
+
   // Accept invite (by token — user must be logged in)
   if (path === '/api/v1/dashboard/invites/accept' && method === 'POST') {
     return dashboardAcceptInvite(request, env, user, corsHeaders);
@@ -891,6 +906,10 @@ async function handleDashboard(request, env, corsHeaders, path) {
 
   if (path === '/api/v1/dashboard/projects/create' && method === 'POST') {
     return dashboardCreateProject(request, env, user, corsHeaders);
+  }
+
+  if (path === '/api/v1/dashboard/projects/link' && method === 'POST') {
+    return dashboardLinkProject(request, env, user, corsHeaders);
   }
 
   // ── Admin routes (superadmin only) ───────────────────────────────────────
@@ -1163,6 +1182,44 @@ async function dashboardCreateProject(request, env, user, corsHeaders) {
   ).bind(user.id, id, 'owner', now).run();
 
   return Response.json({ project_id: id, org_id: targetOrgId }, { headers: corsHeaders });
+}
+
+async function dashboardLinkProject(request, env, user, corsHeaders) {
+  const { project_id } = await request.json();
+  if (!project_id) {
+    return Response.json({ error: 'project_id required' }, { status: 400, headers: corsHeaders });
+  }
+
+  // Check project exists
+  const project = await env.DB.prepare('SELECT * FROM projects WHERE id = ?').bind(project_id).first();
+  if (!project) {
+    return Response.json({ error: 'Project not found' }, { status: 404, headers: corsHeaders });
+  }
+
+  // Check not already linked
+  const existing = await env.DB.prepare(
+    'SELECT 1 FROM user_projects WHERE user_id = ? AND project_id = ?'
+  ).bind(user.id, project_id).first();
+  if (existing) {
+    return Response.json({ ok: true, already_linked: true }, { headers: corsHeaders });
+  }
+
+  const now = new Date().toISOString();
+
+  // Link user as owner
+  await env.DB.prepare(
+    'INSERT INTO user_projects (user_id, project_id, role, permission, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(user.id, project_id, 'owner', 'admin', now).run();
+
+  // Assign to personal org if project has no org
+  if (!project.org_id) {
+    const personalOrg = await getPersonalOrg(env, user.id);
+    if (personalOrg) {
+      await env.DB.prepare('UPDATE projects SET org_id = ? WHERE id = ?').bind(personalOrg.id, project_id).run();
+    }
+  }
+
+  return Response.json({ ok: true }, { headers: corsHeaders });
 }
 
 async function dashboardMoveProject(request, env, user, projectId, corsHeaders) {
@@ -2120,6 +2177,95 @@ async function adminDeleteUser(env, userId, corsHeaders) {
   await env.DB.prepare('DELETE FROM org_members WHERE user_id = ?').bind(userId).run();
   await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
   await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+
+  return Response.json({ ok: true }, { headers: corsHeaders });
+}
+
+// ── CLI Auth Handlers ──────────────────────────────────────────────────────
+
+const CLI_AUTH_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+
+async function handleCliAuthStart(env, corsHeaders) {
+  const code = crypto.randomUUID().split('-')[0]; // Short 8-char code
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + CLI_AUTH_EXPIRY_MS);
+
+  await env.DB.prepare(
+    'INSERT INTO cli_auth_codes (code, status, created_at, expires_at) VALUES (?, ?, ?, ?)'
+  ).bind(code, 'pending', now.toISOString(), expiresAt.toISOString()).run();
+
+  return Response.json({
+    code,
+    auth_url: `${DASHBOARD_URL}/cli-auth?code=${code}`,
+    expires_at: expiresAt.toISOString(),
+  }, { headers: corsHeaders });
+}
+
+async function handleCliAuthPoll(env, code, corsHeaders) {
+  if (!code) {
+    return Response.json({ error: 'Code required' }, { status: 400, headers: corsHeaders });
+  }
+
+  const row = await env.DB.prepare(
+    'SELECT * FROM cli_auth_codes WHERE code = ?'
+  ).bind(code).first();
+
+  if (!row) {
+    return Response.json({ error: 'Invalid code' }, { status: 404, headers: corsHeaders });
+  }
+
+  if (new Date(row.expires_at) < new Date()) {
+    return Response.json({ status: 'expired' }, { headers: corsHeaders });
+  }
+
+  if (row.status === 'approved' && row.session_token) {
+    // Clean up the code
+    await env.DB.prepare('DELETE FROM cli_auth_codes WHERE code = ?').bind(code).run();
+
+    // Get user info
+    const user = await env.DB.prepare('SELECT id, email, plan FROM users WHERE id = ?').bind(row.user_id).first();
+
+    return Response.json({
+      status: 'approved',
+      token: row.session_token,
+      user: user ? { id: user.id, email: user.email, plan: user.plan } : null,
+    }, { headers: corsHeaders });
+  }
+
+  return Response.json({ status: 'pending' }, { headers: corsHeaders });
+}
+
+async function handleCliAuthApprove(request, env, user, corsHeaders) {
+  const { code } = await request.json();
+
+  if (!code) {
+    return Response.json({ error: 'Code required' }, { status: 400, headers: corsHeaders });
+  }
+
+  const row = await env.DB.prepare(
+    'SELECT * FROM cli_auth_codes WHERE code = ? AND status = ?'
+  ).bind(code, 'pending').first();
+
+  if (!row) {
+    return Response.json({ error: 'Invalid or expired code' }, { status: 404, headers: corsHeaders });
+  }
+
+  if (new Date(row.expires_at) < new Date()) {
+    return Response.json({ error: 'Code expired' }, { status: 410, headers: corsHeaders });
+  }
+
+  // Create a long-lived session for the CLI (30 days)
+  const sessionId = crypto.randomUUID();
+  const now = new Date();
+  const sessionExpires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  await env.DB.prepare(
+    'INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)'
+  ).bind(sessionId, user.id, sessionExpires.toISOString(), now.toISOString()).run();
+
+  // Mark the code as approved with the session token
+  await env.DB.prepare(
+    'UPDATE cli_auth_codes SET status = ?, session_token = ?, user_id = ? WHERE code = ?'
+  ).bind('approved', sessionId, user.id, code).run();
 
   return Response.json({ ok: true }, { headers: corsHeaders });
 }
