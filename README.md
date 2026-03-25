@@ -48,35 +48,30 @@ Your `.env` file has 30 secrets. Every developer has a copy. Every server has a 
 
 ## Quick Start
 
-### 1. Install
+### 1. Install and log in
 
 ```bash
-# Node.js
-npm install @vaultdotenv/cli
+npm install -g @vaultdotenv/cli
 
-# Python — copy the vaultdotenv/ directory into your project
-# (pip package coming soon)
+vde login
+# Opens browser → authorize → CLI is linked to your dashboard account
 ```
 
 ### 2. Create a project
 
 ```bash
-npx @vaultdotenv/cli init --name my-app
+vde init --name my-app
 ```
 
-This does four things:
-1. Creates the project on the vault server (assigns a UUID)
-2. Generates your `VAULT_KEY` (embeds the project UUID + a random secret)
-3. Writes `VAULT_KEY=vk_...` to your `.env` file
-4. Registers your machine as the first device (auto-approved)
+This creates the project, generates your `VAULT_KEY`, registers your machine as the first device, and links everything to your dashboard account automatically.
 
 ### 3. Push your secrets
 
 ```bash
-npx @vaultdotenv/cli push --env production
+vde push --env production
 ```
 
-Reads your `.env` file, encrypts every key-value pair (except `VAULT_KEY` itself), and uploads the encrypted blob. The server never sees the plaintext.
+Reads your `.env` file, encrypts every key-value pair with AES-256-GCM, and uploads the encrypted blob. The server never sees the plaintext.
 
 ### 4. Replace dotenv
 
