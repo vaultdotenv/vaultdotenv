@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { encrypt, decrypt, sign, parseVaultKey, generateVaultKey, hashDeviceSecret, deriveKey } = require('./crypto');
 const { parseDotenv, serializeDotenv, pullSecrets, pushSecrets, registerDevice, loadDeviceSecret } = require('./index');
 
