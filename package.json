@@ -12,7 +12,11 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node test/test.js"
+    "test": "node --test test/unit/*.test.js test/integration/cli.test.js",
+    "test:unit": "node --test test/unit/*.test.js",
+    "test:integration": "node --test test/integration/*.test.js",
+    "test:api": "node --test test/integration/api.test.js",
+    "test:legacy": "node test/test.js"
   },
   "keywords": [
     "dotenv",
