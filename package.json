@@ -1,6 +1,6 @@
 {
   "name": "@vaultdotenv/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Drop-in dotenv replacement. One master key locally, everything else encrypted remotely.",
   "main": "src/index.js",
   "bin": {

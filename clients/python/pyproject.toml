@@ -4,11 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vaultdotenv"
-version = "0.1.0"
+version = "0.2.0"
 description = "Drop-in python-dotenv replacement. One master key locally, everything else encrypted remotely."
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Matt Redman" }]
+keywords = ["dotenv", "secrets", "environment", "vault", "encryption"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+    "Topic :: Software Development",
+    "Programming Language :: Python :: 3",
+]
 dependencies = [
     "cryptography>=41.0",
     "httpx>=0.24",
@@ -16,6 +25,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+
+[project.urls]
+Homepage = "https://vaultdotenv.io"
+Documentation = "https://vaultdotenv.io"
+Repository = "https://github.com/vaultdotenv/vaultdotenv"
 
 [project.scripts]
 vaultdotenv = "vaultdotenv.cli:main"

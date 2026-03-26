@@ -21,6 +21,9 @@ def main():
     elif command == "init":
         from vaultdotenv.commands.init import init
         init(args)
+    elif command == "projects":
+        from vaultdotenv.commands.projects import list_projects
+        list_projects(args)
     elif command == "push":
         from vaultdotenv.commands.secrets import push
         push(args)
@@ -80,6 +83,7 @@ Auth:
   vde whoami                           Show current logged-in user
 
 Usage:
+  vde projects                         List all your projects
   vde init [--name project]            Initialize a new vault project
   vde push [--env production]          Push .env secrets to vault
   vde pull [--env staging]             Pull secrets from vault

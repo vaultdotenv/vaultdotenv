@@ -25,7 +25,8 @@ async function main() {
     case 'whoami':   return (await r('./commands/auth')).whoami();
 
     // Project
-    case 'init':     return (await r('./commands/init')).init(args);
+    case 'init':       return (await r('./commands/init')).init(args);
+    case 'projects':   return (await r('./commands/projects')).list(args);
 
     // Secrets
     case 'push':     return (await r('./commands/secrets')).push(args);
@@ -72,6 +73,7 @@ Auth:
   vde whoami                           Show current logged-in user
 
 Usage:
+  vde projects                         List all your projects
   vde init [--name project]            Initialize a new vault project
   vde push [--env production]          Push .env secrets to vault
   vde pull [--env staging]             Pull secrets from vault
