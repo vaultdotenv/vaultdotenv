@@ -5,9 +5,13 @@
  * Webhook signature verified via HMAC-SHA256.
  */
 
-import { DASHBOARD_URL } from '../lib/config.js';
+import { DASHBOARD_URL as DEFAULT_DASHBOARD_URL } from '../lib/config.js';
 
 const STRIPE_API = 'https://api.stripe.com/v1';
+
+function getDashboardUrl(env) {
+  return env.DASHBOARD_URL || DEFAULT_DASHBOARD_URL;
+}
 
 const PRICE_MAP = {
   pro: 'price_1TF1j8IRrTIgf1hhxgTiFNjF',
@@ -103,8 +107,8 @@ export async function createCheckoutSession(request, env, user, corsHeaders) {
     mode: 'subscription',
     'line_items[0][price]': PRICE_MAP[plan],
     'line_items[0][quantity]': '1',
-    success_url: `${DASHBOARD_URL}/billing?success=true`,
-    cancel_url: `${DASHBOARD_URL}/billing?cancelled=true`,
+    success_url: `${getDashboardUrl(env)}/billing?success=true`,
+    cancel_url: `${getDashboardUrl(env)}/billing?cancelled=true`,
     'metadata[vault_user_id]': user.id,
     'metadata[plan]': plan,
     'subscription_data[metadata][vault_user_id]': user.id,
@@ -125,7 +129,7 @@ export async function createPortalSession(request, env, user, corsHeaders) {
 
   const session = await stripeRequest(env, 'POST', '/billing_portal/sessions', {
     customer: dbUser.stripe_customer_id,
-    return_url: `${DASHBOARD_URL}/billing`,
+    return_url: `${getDashboardUrl(env)}/billing`,
   });
 
   return Response.json({ url: session.url }, { headers: corsHeaders });

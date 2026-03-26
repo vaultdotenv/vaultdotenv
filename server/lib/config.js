@@ -2,7 +2,7 @@
  * Shared configuration constants.
  */
 
-export const DASHBOARD_URL = 'https://app.vaultdotenv.io';
+export const DASHBOARD_URL = 'https://app.vaultdotenv.io'; // overridden by env.DASHBOARD_URL in Worker
 export const HMAC_MAX_AGE_MS = 300_000; // 5 minutes
 export const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const CLI_AUTH_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
